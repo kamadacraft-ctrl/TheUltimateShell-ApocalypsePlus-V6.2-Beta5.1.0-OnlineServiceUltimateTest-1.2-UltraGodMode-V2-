@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>TheUltimateShell — Apocalypse++ Ultra God Mod V2</title>
+<style>
+:root{--bg:#000;--fg:#0f0;--dim:#0a0;--warn:#ff0;--danger:#f33;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--fg);font-family:ui-monospace, monospace;overflow:hidden;}
+#topbar{position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid var(--dim);background:#020;}
+#badge{padding:2px 6px;border:1px solid var(--dim);}
+#panicBtn{margin-left:auto;padding:6px 10px;border:1px solid var(--danger);color:#000;background:var(--danger);border-radius:6px;font-weight:700;cursor:pointer;}
+#screen{padding:10px;height:50vh;overflow:auto;white-space:pre-wrap;border-bottom:1px solid var(--dim);}
+#cmdWrap{display:flex;gap:6px;padding:8px;}
+#cmd{flex:1;background:#000;color:var(--fg);border:1px solid var(--dim);padding:10px;border-radius:8px;font-size:16px;}
+#gui{position:fixed;inset:0;pointer-events:none;}
+.popup-warning{position:absolute;top:20%;left:50%;transform:translate(-50%,-50%);padding:20px 40px;background:var(--danger);color:#000;font-weight:700;font-size:18px;border-radius:12px;box-shadow:0 0 20px var(--danger);display:none;z-index:1000;}
+</style>
+</head>
+<body>
+<div id="topbar">
+  <strong>TheUltimateShell Apocalypse++ Ultra God Mod V2</strong>
+  <span id="badge">SAFE</span>
+  <button id="panicBtn">PANIC</button>
+</div>
+<div id="screen"></div>
+<div id="cmdWrap">
+  <input id="cmd" placeholder="type: godmode apocalypse | godultimate | spawn ..."/>
+</div>
+<div id="gui"></div>
+<div id="popupWarning" class="popup-warning">⚠️ SYSTEM OVERLOAD!</div>
+
+<script>
+/* ================== UTIL ================== */
+const $=q=>document.querySelector(q);
+const screen=$("#screen"), cmd=$("#cmd"), gui=$("#gui"), badge=$("#badge"), popup=$("#popupWarning");
+const log=t=>{screen.textContent+=t+"\n";screen.scrollTop=1e9;}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const now=()=>performance.now();
+
+/* ================= KERNEL ================= */
+const KERNEL={
+  state:"running",
+  ticks:0,
+  mode:"safe",
+  panic:false,
+  cpuLoad:0,
+  memLoad:0,
+  lastTick:now(),
+  init(){
+    log("🌌 Booting TheUltimateShell Apocalypse++ Ultra God Mod V2");
+    SCHED.init(); WM.init(); NET.init(); AI.init(); SOUND.init(); WATCHDOG.init();
+    log("✅ Ready. Try: godmode apocalypse | godultimate");
+  },
+  setMode(m){
+    this.mode=m;
+    badge.textContent=m.toUpperCase();
+    badge.style.borderColor=(m==="apocalypse"||m==="godmodultimate")?"var(--danger)":"var(--dim)";
+    log("⚙️ Mode set: "+m);
+  }
+};
+
+/* ================= RESTART ================= */
+function restartKernel(){
+    log("♻️ Kernel restarting...");
+    KERNEL.panic=false; 
+    KERNEL.ticks=0; 
+    KERNEL.cpuLoad=0; 
+    OVERLOAD.stop(); 
+    if(typeof MOD_OVERLOAD!=="undefined") MOD_OVERLOAD.stopGodMode();
+    KERNEL.setMode("safe"); 
+    log("✅ Kernel restarted successfully");
+}
+
+/* ================= WATCHDOG ================= */
+const WATCHDOG={
+  hardLimitMs:14,
+  spikes:0,
+  init(){},
+  check(dt){
+    if(dt>this.hardLimitMs) this.spikes++;
+    if(this.spikes>20){
+      log("🧯 WATCHDOG throttling");
+      OVERLOAD.throttle(); 
+      this.spikes=0;
+    }
+  }
+};
+
+/* ================= SCHEDULER ================= */
+const SCHED={
+  q:[],
+  maxQ:5000,
+  init(){log("SCHED online");},
+  spawn(name,fn){
+    if(this.q.length>this.maxQ) return;
+    this.q.push({name,fn,age:0});
+  },
+  tick(){
+    const n=clamp(this.q.length,1,200);
+    for(let i=0;i<n;i++){
+      const p=this.q.shift();
+      if(!p) break;
+      p.age++;
+      try{p.fn(p);}catch(e){log("⚠️ Process error: "+e);}
+      this.q.push(p);
+    }
+  }
+};
+
+/* ================= WINDOW MANAGER ================= */
+const WM={count:0,init(){},create(title,body){this.count++;}};
+
+/* ================= NETWORK ================= */
+const NET={buf:[],init(){},send(m){this.buf.push(m);},recv(){return this.buf.shift();}};
+
+/* ================= OVERLOAD ================= */
+const OVERLOAD={
+  workers:[],
+  particles:0,
+  domFlood:0,
+  throttle(){
+    this.domFlood=Math.max(0,this.domFlood-50);
+    this.particles=Math.max(0,this.particles-1000);
+    this.workers.splice(0,Math.floor(this.workers.length/2)).forEach(w=>w.terminate());
+    log("↘️ Throttle applied");
+  },
+  start(mode){
+    KERNEL.setMode(mode);
+    let wCount=0, domCount=0, particleCount=0;
+    if(mode==="safe") return;
+    if(mode==="stress"){ wCount=2; domCount=200; particleCount=200; }
+    if(mode==="insane"){ wCount=4; domCount=500; particleCount=600; }
+    if(mode==="apocalypse"){ wCount=8; domCount=1200; particleCount=1500; }
+    if(mode==="godmodultimate"){ wCount=12; domCount=3000; particleCount=5000; }
+    this.spawn(wCount, domCount, particleCount);
+  },
+  spawn(wCount,domCount,particleCount){
+    for(let i=0;i<wCount;i++){
+      if(this.workers.length>50) break;
+      const blob=new Blob([`
+        let t=0;
+        onmessage=()=>{};
+        function burn(){
+          const a=new Float64Array(10000);
+          for(let i=0;i<a.length;i++) a[i]=Math.sin(i+t);
+          t++;
+          setTimeout(burn,0);
+        }
+        burn();
+      `],{type:"text/javascript"});
+      const w=new Worker(URL.createObjectURL(blob));
+      this.workers.push(w);
+    }
+    this.domFlood+=domCount;
+    this.particles+=particleCount;
+    log("🔥 Overload spawn: workers="+wCount+" dom="+domCount+" particles="+particleCount);
+  },
+  tick(){
+    let batch=clamp(this.domFlood,0,30); this.domFlood-=batch;
+    let p=clamp(this.particles,0,500); this.particles-=p;
+    KERNEL.cpuLoad=p;
+  },
+  stop(){
+    this.workers.forEach(w=>w.terminate());
+    this.workers=[];
+    this.domFlood=0;
+    this.particles=0;
+    KERNEL.setMode("safe");
+  }
+};
+
+/* ================= AI 3.0 ================= */
+const AI={
+  memory:[],
+  init(){log("AI 3.0 initialized");},
+  learn(msg){this.memory.push(msg);},
+  chat(msg,callback){const response="🤖 AI: '"+msg+"'"; callback(response);}
+};
+
+/* ================= SOUND ================= */
+const SOUND={
+  init(){log("🔊 Sound system ready");},
+  play(url){
+    try{
+      const a=new Audio(url);
+      a.preload="auto";
+      a.play().catch(e=>log("⚠️ Audio play blocked: "+e.message));
+    } catch(e){ log("⚠️ Audio error: "+e.message); }
+  }
+};
+
+/* ================= CLOCK LOOP ================= */
+let last=now();
+function loop(){
+  if(KERNEL.panic) return;
+  const t=now(), dt=t-last;
+  last=t;
+  KERNEL.ticks++;
+  WATCHDOG.check(dt);
+  SCHED.tick();
+  OVERLOAD.tick();
+  if(typeof MOD_WATCHDOG !== "undefined") MOD_WATCHDOG.systemCheck();
+  if(KERNEL.ticks%30===0) log(`tick=${KERNEL.ticks} mode=${KERNEL.mode} workers=${OVERLOAD.workers.length}`);
+  requestAnimationFrame(loop);
+}
+
+/* ================= SHELL ================= */
+cmd.addEventListener("keydown",e=>{
+  if(e.key!=="Enter") return;
+  const c=cmd.value.trim(); cmd.value="";
+  log("> "+c);
+  if(c==="panic"){KERNEL.panic=true;OVERLOAD.stop();log("🚨 PANIC ACTIVATED"); return;}
+  if(c.startsWith("godmode")){const m=c.split(" ")[1]||"safe";OVERLOAD.start(m);return;}
+  if(c==="status"){log(JSON.stringify({ticks:KERNEL.ticks,mode:KERNEL.mode,workers:OVERLOAD.workers.length},null,2));return;}
+  if(c.startsWith("spawn ")) SCHED.spawn(c.slice(6),p=>{log("Process "+c.slice(6)+" running")});
+  if(c.startsWith("ai ")) AI.chat(c.slice(3),r=>log(r));
+  if(c.startsWith("sound ")) SOUND.play(c.slice(6));
+  if(c==="clear") screen.textContent="";
+});
+
+/* ================= PANIC BUTTON ================= */
+$("#panicBtn").onclick=()=>{KERNEL.panic=true;OVERLOAD.stop(); if(typeof MOD_OVERLOAD!=="undefined") MOD_OVERLOAD.stopGodMode(); log("🚨 PANIC BUTTON");};
+
+/* ================= BOOT ================= */
+KERNEL.init();
+requestAnimationFrame(loop);
+
+/* ================= MOD PATCH V2 ================= */
+(() => {
+  log("⚡ Mod God Ultimate Patch V2 loaded!");
+  const MOD_WATCHDOG={
+    spikes:0,
+    hardLimitMs:14,
+    check(dt){if(dt>this.hardLimitMs)this.spikes++;if(this.spikes>20){log("🧯 MOD WATCHDOG throttling"); OVERLOAD.throttle(); this.spikes=0;}},
+    systemCheck(){if(KERNEL.cpuLoad>1500 || OVERLOAD.domFlood>2500){popup.style.display="block"; setTimeout(()=>popup.style.display="none",2000); restartKernel();}}
+  };
+  const MOD_AI={
+    memory:[],
+    init(){log("🤖 MOD AI 3.1 initialized");AI.init();},
+    learn(msg){this.memory.push(msg);AI.learn(msg);},
+    chat(msg,callback){let r="🤖 MOD AI God: '"+msg+"'";AI.chat(msg,x=>callback(r+"\n[AI base] "+x));}
+  };
+  const MOD_OVERLOAD={
+    startGodMode(){KERNEL.setMode("godmodultimate");OVERLOAD.start("godmodultimate"); log("👑 MOD_OVERLOAD: God Ultimate Mode activated!");},
+    stopGodMode(){OVERLOAD.stop();log("🛑 MOD_OVERLOAD: God Ultimate Mode deactivated");KERNEL.setMode("safe");}
+  };
+
+  cmd.addEventListener("keydown",e=>{
+    if(e.key!=="Enter") return;
+    const c=cmd.value.trim(); cmd.value="";
+    if(c==="godultimate") MOD_OVERLOAD.startGodMode();
+    if(c==="stopgod") MOD_OVERLOAD.stopGodMode();
+    if(c.startsWith("modai ")) MOD_AI.chat(c.slice(6),r=>log(r));
+    if(c.startsWith("modlearn ")) {MOD_AI.learn(c.slice(9)); log("MOD_AI: learned '"+c.slice(9)+"'");}
+  });
+
+  const panicBtn=$("#panicBtn");
+  panicBtn.onclick=()=>{KERNEL.panic=true;MOD_OVERLOAD.stopGodMode();OVERLOAD.stop(); log("🚨 MOD PANIC BUTTON: All processes halted, system safe!");};
+
+  log("💫 Mod God Ultimate V2 patch ready! Commands: godultimate | stopgod | modai <msg> | modlearn <msg>");
+})();
+</script>
+</body>
+</html>
+<!-- ================= MOD : OnlineServiceTest1 ================= -->
+<script>
+/*
+  MOD NAME : OnlineServiceTest1
+  TYPE     : Stability / Security Background Service
+  MODE     : Event-driven (No infinite loop)
+  POLICY   : Non-destructive, No feature override
+*/
+
+(function(){
+  const MOD_NAME = "OnlineServiceTest1";
+
+  /* ---------- STATE ---------- */
+  const state = {
+    active: true,
+    lastCheck: 0,
+    busy: false
+  };
+
+  /* ---------- WAIT CORE ---------- */
+  const wait = setInterval(()=>{
+    if(window.shell && shell.print){
+      clearInterval(wait);
+      init();
+    }
+  },100);
+
+  function init(){
+    log("Service initialized");
+
+    // register service info only (no command spam)
+    if(shell.registerCommand){
+      shell.registerCommand("service.onlinetest.status", serviceStatus);
+      shell.registerCommand("service.onlinetest.scan", manualScan);
+    }
+  }
+
+  /* ---------- CORE LOGIC ---------- */
+
+  function serviceStatus(){
+    return `
+Service : ${MOD_NAME}
+State   : ${state.active ? "ACTIVE" : "INACTIVE"}
+Busy    : ${state.busy}
+LastRun : ${state.lastCheck ? new Date(state.lastCheck).toLocaleTimeString() : "Never"}
+Policy  : Run only on symptom
+`;
+  }
+
+  function manualScan(){
+    if(state.busy) return "Service busy, scan skipped";
+    runScan("manual");
+    return "Manual scan requested";
+  }
+
+  // public hook (used only if system reports problem)
+  window.__OnlineServiceTest1_ReportIssue = function(type){
+    if(state.busy) return;
+    runScan(type);
+  };
+
+  /* ---------- SCAN ENGINE ---------- */
+
+  function runScan(reason){
+    state.busy = true;
+    state.lastCheck = Date.now();
+
+    log("Scan started (" + reason + ")");
+
+    setTimeout(()=>{
+      const result = analyzeSystem();
+
+      if(result.bug){
+        fixBug(result.bug);
+      }
+
+      if(result.virus){
+        removeVirus(result.virus);
+      }
+
+      if(result.corrupt){
+        repairSystem(result.corrupt);
+      }
+
+      if(!result.bug && !result.virus && !result.corrupt){
+        log("No issue found, service idle");
+      }
+
+      state.busy = false;
+    },300);
+  }
+
+  /* ---------- ANALYZER ---------- */
+
+  function analyzeSystem(){
+    // ตรวจเฉพาะอาการ ไม่สุ่มรันมั่ว
+    return {
+      bug: window.__SYSTEM_BUG__ || null,
+      virus: window.__SYSTEM_VIRUS__ || null,
+      corrupt: window.__SYSTEM_CORRUPT__ || null
+    };
+  }
+
+  /* ---------- FIXERS ---------- */
+
+  function fixBug(bug){
+    log("Bug detected → applying fix");
+    try{
+      if(typeof bug.fix === "function") bug.fix();
+      log("Bug fixed");
+      window.__SYSTEM_BUG__ = null;
+    }catch(e){
+      log("Bug fix failed: "+e.message);
+    }
+  }
+
+  function removeVirus(virus){
+    log("Virus detected → removing");
+    try{
+      if(typeof virus.kill === "function") virus.kill();
+      log("Virus removed");
+      window.__SYSTEM_VIRUS__ = null;
+    }catch(e){
+      log("Virus removal failed: "+e.message);
+    }
+  }
+
+  function repairSystem(corrupt){
+    log("System corruption detected → repairing");
+    try{
+      if(typeof corrupt.repair === "function") corrupt.repair();
+      log("System repaired");
+      window.__SYSTEM_CORRUPT__ = null;
+    }catch(e){
+      log("Repair failed: "+e.message);
+    }
+  }
+
+  /* ---------- LOGGER ---------- */
+
+  function log(msg){
+    console.log("[%c"+MOD_NAME+"%c] "+msg,"color:#0f0","color:inherit");
+    if(shell && shell.print){
+      shell.print(MOD_NAME+": "+msg);
+    }
+  }
+
+})();
+</script>
+<!-- ================= END MOD ================= -->
+
+✅️ The system alert program is currently running. Press the panic button or type panic to stop this program (no harm done).
+.......................................
+⚠️ Warning: Some commands are not yet available!
